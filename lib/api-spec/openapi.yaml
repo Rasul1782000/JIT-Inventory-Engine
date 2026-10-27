@@ -5,32 +5,271 @@ info:
   version: 0.1.0
   description: API specification
 servers:
-  - url: /api
-    description: Base API path
+  - url: /inventory-api/api
+    description: Laravel inventory API, routed through the inventory service
 tags:
-  - name: health
-    description: Health operations
+  - name: inventory
+    description: Inventory levels and reorder calculations
+  - name: suppliers
+    description: Supplier records
+  - name: purchase-orders
+    description: Draft purchase orders
+  - name: sales
+    description: Sales history
 paths:
-  /healthz:
+  /dashboard:
     get:
-      operationId: healthCheck
-      tags: [health]
-      summary: Health check
-      description: Returns server health status
+      operationId: getDashboard
+      tags: [inventory]
+      summary: Get inventory overview
       responses:
         "200":
-          description: Healthy
+          description: Dashboard totals
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                $ref: "#/components/schemas/DashboardSummary"
+  /inventory:
+    get:
+      operationId: listInventory
+      tags: [inventory]
+      summary: List inventory with reorder calculations
+      parameters:
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [30, 60, 90]
+            default: 30
+      responses:
+        "200":
+          description: Inventory and calculated replenishment metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+    post:
+      operationId: createProduct
+      tags: [inventory]
+      summary: Add an inventory product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+  /inventory/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [inventory]
+      summary: Update product stock or replenishment settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [suppliers]
+      summary: List suppliers
+      responses:
+        "200":
+          description: Supplier directory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supplier"
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Add a supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInput"
+      responses:
+        "201":
+          description: Created supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+  /purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      tags: [purchase-orders]
+      summary: List purchase orders
+      responses:
+        "200":
+          description: Purchase order drafts and history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseOrder"
+  /purchase-orders/drafts:
+    post:
+      operationId: generatePurchaseOrderDrafts
+      tags: [purchase-orders]
+      summary: Create drafts for items below reorder point
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderScanInput"
+      responses:
+        "201":
+          description: Draft purchase orders created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReorderScanResult"
+  /sales:
+    post:
+      operationId: recordSale
+      tags: [sales]
+      summary: Record a sale and reduce on-hand stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaleInput"
+      responses:
+        "201":
+          description: Sale recorded and stock updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
 components:
   schemas:
-    HealthStatus:
+    Supplier:
+      type: object
+      required: [id, name, leadTimeDays, integrationStatus]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        contactName: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        leadTimeDays: { type: integer }
+        integrationStatus: { type: string, enum: [manual, connected] }
+    SupplierInput:
+      type: object
+      required: [name, leadTimeDays]
+      properties:
+        name: { type: string, minLength: 1 }
+        contactName: { type: string }
+        email: { type: string }
+        leadTimeDays: { type: integer, minimum: 1 }
+    ProductInput:
+      type: object
+      required: [sku, name, supplierId, unitCost, onHand, safetyStockDays]
+      properties:
+        sku: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        category: { type: string }
+        supplierId: { type: integer }
+        unitCost: { type: number, minimum: 0 }
+        onHand: { type: integer, minimum: 0 }
+        safetyStockDays: { type: integer, minimum: 0 }
+    ProductUpdate:
       type: object
       properties:
-        status:
-          type: string
-      required:
-        - status
+        onHand: { type: integer, minimum: 0 }
+        safetyStockDays: { type: integer, minimum: 0 }
+        supplierId: { type: integer }
+        unitCost: { type: number, minimum: 0 }
+    InventoryItem:
+      type: object
+      required: [id, sku, name, category, supplierId, supplierName, unitCost, onHand, leadTimeDays, safetyStockDays, averageDailySales, leadTimeDemand, safetyStock, reorderPoint, projectedDaysCover, salesWindow, status]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        category: { type: string }
+        supplierId: { type: integer }
+        supplierName: { type: string }
+        unitCost: { type: number }
+        onHand: { type: integer }
+        leadTimeDays: { type: integer }
+        safetyStockDays: { type: integer }
+        averageDailySales: { type: number }
+        leadTimeDemand: { type: number }
+        safetyStock: { type: number }
+        reorderPoint: { type: integer }
+        projectedDaysCover: { type: number }
+        salesWindow: { type: integer }
+        status: { type: string, enum: [healthy, reorder, critical] }
+    DashboardSummary:
+      type: object
+      required: [skuCount, stockValue, belowReorderCount, openDraftCount, unitsSold30d, inventoryHealth]
+      properties:
+        skuCount: { type: integer }
+        stockValue: { type: number }
+        belowReorderCount: { type: integer }
+        openDraftCount: { type: integer }
+        unitsSold30d: { type: integer }
+        inventoryHealth: { type: number }
+    PurchaseOrder:
+      type: object
+      required: [id, reference, supplierId, supplierName, status, itemCount, total, createdAt]
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        supplierId: { type: integer }
+        supplierName: { type: string }
+        status: { type: string, enum: [draft, submitted] }
+        itemCount: { type: integer }
+        total: { type: number }
+        createdAt: { type: string, format: date-time }
+    ReorderScanInput:
+      type: object
+      properties:
+        window: { type: integer, enum: [30, 60, 90], default: 30 }
+    ReorderScanResult:
+      type: object
+      required: [createdCount, purchaseOrders]
+      properties:
+        createdCount: { type: integer }
+        purchaseOrders:
+          type: array
+          items: { $ref: "#/components/schemas/PurchaseOrder" }
+    SaleInput:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
 

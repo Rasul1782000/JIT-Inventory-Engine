@@ -1,0 +1,50 @@
+kind = "web"
+previewPath = "/"
+title = "Reorder Point Inventory"
+description = "An inventory purchasing app for lean businesses that calculates replenishment thresholds from sales velocity and lead times, then creates draft purchase orders when stock runs low."
+version = "1.0.0"
+id = "artifacts/inventory-reorder"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19606
+
+[services.development]
+run = "pnpm --filter @workspace/inventory-reorder run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/inventory-reorder", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/inventory-reorder/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19606"
+BASE_PATH = "/"
+
+[[services]]
+name = "laravel-api"
+paths = ["/inventory-api"]
+localPort = 19607
+
+[services.development]
+run = "bash backend/bin/start-server.sh"
+
+[services.production]
+
+[services.production.build]
+args = ["bash", "backend/bin/build.sh"]
+
+[services.production.run]
+args = ["bash", "artifacts/inventory-reorder/backend/bin/start-server.sh"]
+
+[services.env]
+PORT = "19607"
+APP_ENV = "production"
+APP_DEBUG = "false"
+DB_CONNECTION = "pgsql"
