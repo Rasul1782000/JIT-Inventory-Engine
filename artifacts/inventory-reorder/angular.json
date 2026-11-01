@@ -45,6 +45,11 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "allowedHosts": [
+              "4ac5b80c-e93d-48f2-a71c-ccd9f3a37852-00-3maxyfigz0thb.picard.replit.dev"
+            ]
+          },
           "configurations": {
             "production": {
               "buildTarget": "inventory-reorder:build:production"
